@@ -1,0 +1,35 @@
+MACE CloudRF Plugin
+===================
+
+Contents
+--------
+- CloudRFPlugin.dll
+- area-template.json
+- README.md
+
+Install
+-------
+1. Close MACE.
+2. Copy CloudRFPlugin.dll to:
+   C:\Users\Public\Documents\MACE\PlugIns
+3. If Windows shows an Unblock button on the DLL:
+   right-click CloudRFPlugin.dll -> Properties -> Unblock -> OK.
+4. Start MACE.
+5. Open System Settings -> Plugins.
+6. Enable CloudRF under Third Party Plugins.
+7. Open the CloudRF plugin, enter your CloudRF API key, select a MACE entity, and run area coverage.
+
+Runtime Files
+-------------
+The plugin creates and uses:
+
+C:\Users\Public\Documents\MACE\CloudRF
+
+This folder stores settings, the editable CloudRF area template, request/response logs, GeoTIFF outputs, and text legends.
+
+Notes
+-----
+- A valid CloudRF API key is required.
+- Network access to https://api.cloudrf.com is required.
+- The plugin was built for the installed MACE API on the development machine. If it does not load on another MACE version, check the MACE error log in:
+  C:\Users\Public\Documents\MACE\output
