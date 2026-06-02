@@ -14,6 +14,8 @@ namespace CloudRFPlugin
     internal sealed class CloudRFForm : Form
     {
         private const int DefaultRasterTransparency = 50;
+        private const int ParameterGroupWidth = 315;
+        private const int ParameterGroupHeight = 270;
 
         private readonly IMACEPlugInHost _host;
         private CloudRFSettings _settings;
@@ -178,8 +180,8 @@ namespace CloudRFPlugin
             main.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 330));
             main.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 330));
             main.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 330));
-            main.RowStyles.Add(new RowStyle(SizeType.Absolute, 275));
-            main.RowStyles.Add(new RowStyle(SizeType.Absolute, 255));
+            main.RowStyles.Add(new RowStyle(SizeType.Absolute, ParameterGroupHeight + 12));
+            main.RowStyles.Add(new RowStyle(SizeType.Absolute, ParameterGroupHeight + 12));
             scrollPanel.Controls.Add(main);
 
             var transmitter = CreateGroup("Transmitter");
@@ -244,15 +246,8 @@ namespace CloudRFPlugin
 
         private static void AddFixedGroup(TableLayoutPanel main, GroupBuilder group, int column, int row)
         {
-            group.GroupBox.Width = 315;
-            if (row == 0 && column == 2)
-            {
-                group.GroupBox.Height = 260;
-            }
-            else
-            {
-                group.GroupBox.Height = row == 0 ? 132 + (group.RowCount * 24) : 132 + (group.RowCount * 24);
-            }
+            group.GroupBox.Width = ParameterGroupWidth;
+            group.GroupBox.Height = ParameterGroupHeight;
             group.GroupBox.Dock = DockStyle.None;
             group.GroupBox.Anchor = AnchorStyles.Top | AnchorStyles.Left;
             group.GroupBox.Margin = new Padding(6);
