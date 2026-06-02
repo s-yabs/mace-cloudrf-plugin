@@ -45,6 +45,7 @@ namespace CloudRFPlugin
         private NumericUpDown _horizontalBeamwidthDeg;
         private NumericUpDown _verticalBeamwidthDeg;
         private NumericUpDown _frontBackRatioDb;
+        private ComboBox _antennaPattern;
         private ComboBox _polarization;
         private NumericUpDown _rxHeightM;
         private NumericUpDown _rxGainDbi;
@@ -55,6 +56,7 @@ namespace CloudRFPlugin
         private ComboBox _modulation;
         private ComboBox _bitErrorRate;
         private ComboBox _modelMode;
+        private ComboBox _diffractionMode;
         private NumericUpDown _reliability;
         private ComboBox _colorSchema;
         private ComboBox _clutterProfile;
@@ -201,12 +203,16 @@ namespace CloudRFPlugin
             _horizontalBeamwidthDeg = AddNumber(antenna, "Horizontal beamwidth", 1, 360, 90, 0);
             _verticalBeamwidthDeg = AddNumber(antenna, "Vertical beamwidth", 1, 360, 90, 0);
             _frontBackRatioDb = AddNumber(antenna, "Front/back ratio (dB)", 0, 100, 2, 0);
+            _antennaPattern = AddOptionCombo(antenna, "Pattern", AntennaPatternChoices());
+            SetToolTip(_antennaPattern, "CloudRF antenna pattern ID. DIPOLE.adf is the Web UI default seen in the KMZ request.");
             _polarization = AddOptionCombo(antenna, "Polarisation", PolarisationChoices());
             AddFixedGroup(main, antenna, 2, 0);
 
             var model = CreateGroup("Model");
             _modelMode = AddOptionCombo(model, "Propagation model", PropagationModelChoices());
             SetToolTip(_modelMode, PropagationModelToolTip());
+            _diffractionMode = AddOptionCombo(model, "Diffraction", OffOnChoices());
+            SetToolTip(_diffractionMode, "Knife-edge diffraction. OFF matches the Web UI KMZ request field model.ked = 0.");
             _reliability = AddNumber(model, "Reliability (%)", 1, 99, 90, 0);
             SetToolTip(_reliability, "Reliability/time percentage used by supported models such as ITM. Higher values are more conservative.");
             AddFixedGroup(main, model, 0, 1);
@@ -410,6 +416,7 @@ namespace CloudRFPlugin
         {
             return new List<OptionItem>
             {
+                new OptionItem(0, "Not set / Web UI default"),
                 new OptionItem(1, "4QAM"),
                 new OptionItem(2, "16QAM"),
                 new OptionItem(3, "64QAM"),
@@ -421,6 +428,15 @@ namespace CloudRFPlugin
                 new OptionItem(9, "16PSK"),
                 new OptionItem(10, "32PSK"),
                 new OptionItem(11, "LoRa")
+            };
+        }
+
+        private static List<OptionItem> AntennaPatternChoices()
+        {
+            return new List<OptionItem>
+            {
+                new OptionItem(1, "DIPOLE.adf"),
+                new OptionItem(0, "Custom / no pattern")
             };
         }
 
@@ -442,6 +458,7 @@ namespace CloudRFPlugin
             {
                 return new List<OptionItem>
                 {
+                    new OptionItem(0, "Not set / Web UI default"),
                     new OptionItem(7, "SF7"),
                     new OptionItem(8, "SF8"),
                     new OptionItem(9, "SF9"),
@@ -453,6 +470,7 @@ namespace CloudRFPlugin
 
             return new List<OptionItem>
             {
+                new OptionItem(0, "Not set / Web UI default"),
                 new OptionItem(1, "0.1"),
                 new OptionItem(2, "0.01"),
                 new OptionItem(3, "0.001"),
@@ -482,14 +500,15 @@ namespace CloudRFPlugin
 
         private void RefreshBitErrorRateChoices()
         {
-            int previousValue = GetSelectedOptionValue(_bitErrorRate, 1);
-            bool lora = GetSelectedOptionValue(_modulation, 1) == 11;
+            int previousValue = GetSelectedOptionValue(_bitErrorRate, 0);
+            int modulation = GetSelectedOptionValue(_modulation, 0);
+            bool lora = modulation == 11;
             _bitErrorRate.Items.Clear();
             _bitErrorRate.Items.AddRange(BitErrorRateChoices(lora).ToArray());
             SelectOptionValue(_bitErrorRate, previousValue);
 
             int selectedValue = GetSelectedOptionValue(_bitErrorRate, 0);
-            if ((lora && selectedValue < 7) || (!lora && selectedValue > 6))
+            if (modulation == 0 || (lora && selectedValue > 0 && selectedValue < 7) || (!lora && selectedValue > 6))
             {
                 _bitErrorRate.SelectedIndex = 0;
             }
@@ -660,14 +679,16 @@ namespace CloudRFPlugin
             SetNumber(_horizontalBeamwidthDeg, GetDecimal(antenna, "hbw", _horizontalBeamwidthDeg.Value));
             SetNumber(_verticalBeamwidthDeg, GetDecimal(antenna, "vbw", _verticalBeamwidthDeg.Value));
             SetNumber(_frontBackRatioDb, GetDecimal(antenna, "fbr", _frontBackRatioDb.Value));
+            SelectOptionValue(_antennaPattern, GetInt(antenna, "ant", 1));
             SelectOptionValue(_polarization, JsonTools.GetString(antenna, "pol", "v"));
             SetNumber(_radiusKm, GetDecimal(output, "rad", _radiusKm.Value));
             SetNumber(_resolutionM, GetDecimal(output, "res", _resolutionM.Value));
             SetNumber(_noiseFloorDbm, GetDecimal(output, "nf", _noiseFloorDbm.Value));
-            SelectOptionValue(_modulation, GetInt(output, "mod", 1));
+            SelectOptionValue(_modulation, GetInt(output, "mod", 0));
             RefreshBitErrorRateChoices();
-            SelectOptionValue(_bitErrorRate, GetInt(output, "ber", 1));
+            SelectOptionValue(_bitErrorRate, GetInt(output, "ber", 0));
             SelectOptionValue(_modelMode, GetInt(model, "pm", 1));
+            SelectOptionValue(_diffractionMode, GetInt(model, "ked", 0));
             SetNumber(_reliability, GetDecimal(model, "rel", _reliability.Value));
             _colorSchema.Text = JsonTools.GetString(output, "col", "LORA.dBm");
             _legendControl.SchemaName = _colorSchema.Text;
@@ -909,16 +930,20 @@ namespace CloudRFPlugin
             antenna["hbw"] = D(_horizontalBeamwidthDeg);
             antenna["vbw"] = D(_verticalBeamwidthDeg);
             antenna["fbr"] = D(_frontBackRatioDb);
+            antenna["ant"] = GetSelectedOptionValue(_antennaPattern, 1);
             antenna["pol"] = GetSelectedOptionCode(_polarization, "v");
 
             model["pm"] = GetSelectedOptionValue(_modelMode, 1);
+            model["ked"] = GetSelectedOptionValue(_diffractionMode, 0);
             model["rel"] = Convert.ToInt32(_reliability.Value);
 
             output["rad"] = D(_radiusKm);
             output["res"] = D(_resolutionM);
             output["nf"] = D(_noiseFloorDbm);
-            output["mod"] = GetSelectedOptionValue(_modulation, 1);
-            output["ber"] = GetSelectedOptionValue(_bitErrorRate, 1);
+            int modulation = GetSelectedOptionValue(_modulation, 0);
+            int bitErrorRate = GetSelectedOptionValue(_bitErrorRate, 0);
+            output["mod"] = modulation == 0 ? null : (object)modulation;
+            output["ber"] = bitErrorRate == 0 ? null : (object)bitErrorRate;
             output["col"] = _colorSchema.Text.Trim();
 
             environment["clt"] = string.IsNullOrWhiteSpace(_clutterProfile.Text) ? "Minimal.clt" : _clutterProfile.Text.Trim();

@@ -88,7 +88,7 @@ namespace CloudRFPlugin
     ""mode"": ""template"",
     ""txg"": 2,
     ""txl"": 0,
-    ""ant"": 39,
+    ""ant"": 1,
     ""azi"": 0,
     ""tlt"": 0,
     ""hbw"": 90,
@@ -99,7 +99,7 @@ namespace CloudRFPlugin
   ""model"": {
     ""pm"": 1,
     ""pe"": 2,
-    ""ked"": 1,
+    ""ked"": 0,
     ""rel"": 90
   },
   ""environment"": {
@@ -113,8 +113,8 @@ namespace CloudRFPlugin
     ""units"": ""m"",
     ""col"": ""LORA.dBm"",
     ""out"": 2,
-    ""ber"": 1,
-    ""mod"": 1,
+    ""ber"": null,
+    ""mod"": null,
     ""nf"": -124,
     ""res"": 30,
     ""rad"": 20
