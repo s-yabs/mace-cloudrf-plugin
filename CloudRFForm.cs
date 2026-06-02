@@ -33,7 +33,7 @@ namespace CloudRFPlugin
         private Button _runButton;
         private Button _removeLastLayerButton;
         private LegendControl _legendControl;
-        private PictureBox _downloadedLegendPictureBox;
+        private TextBox _lastRunSummaryTextBox;
         private ToolTip _toolTips;
 
         private NumericUpDown _frequencyMhz;
@@ -268,10 +268,18 @@ namespace CloudRFPlugin
             right.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
             right.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             panel.Controls.Add(right, 1, 0);
-            right.Controls.Add(new Label { Text = "CloudRF chart image, when returned by the API", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
+            right.Controls.Add(new Label { Text = "Last Run Summary", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Font = new Font(Font, FontStyle.Bold) }, 0, 0);
 
-            _downloadedLegendPictureBox = new PictureBox { Dock = DockStyle.Fill, BorderStyle = BorderStyle.FixedSingle, SizeMode = PictureBoxSizeMode.Zoom };
-            right.Controls.Add(_downloadedLegendPictureBox, 0, 1);
+            _lastRunSummaryTextBox = new TextBox
+            {
+                Dock = DockStyle.Fill,
+                Multiline = true,
+                ReadOnly = true,
+                ScrollBars = ScrollBars.Vertical,
+                Font = new Font(FontFamily.GenericMonospace, 9f),
+                Text = "Run CloudRF area coverage to populate this summary."
+            };
+            right.Controls.Add(_lastRunSummaryTextBox, 0, 1);
         }
 
         private void BuildLog(TableLayoutPanel root)
@@ -755,18 +763,20 @@ namespace CloudRFPlugin
                 string legendPath = await client.DownloadLegendAsync(result, baseName, _runCancellation.Token);
                 if (!string.IsNullOrWhiteSpace(legendPath))
                 {
-                    _downloadedLegendPictureBox.ImageLocation = legendPath;
                     Log("CloudRF legend saved: " + legendPath);
                 }
 
+                var importedLayerNames = new List<string>();
                 if (_settings.AutoImportGeoTiff)
                 {
                     List<string> beforeImport = CaptureRasterLayerNames();
                     bool loaded = _host.Mission.Map.LayerManager.AddRasterLayerFromFile(geoTiffPath);
-                    TrackImportedRasterLayers(beforeImport, geoTiffPath, loaded);
+                    importedLayerNames = TrackImportedRasterLayers(beforeImport, geoTiffPath, loaded);
                     Log(loaded ? "MACE raster layer imported." : "MACE raster import returned false.");
                     _host.DisplayNotification("CloudRF", loaded ? "Coverage GeoTIFF loaded into MACE." : "GeoTIFF downloaded, but MACE did not load it.");
                 }
+
+                UpdateLastRunSummary(result, geoTiffPath, legendPath, importedLayerNames);
             }
             catch (Exception ex)
             {
@@ -802,11 +812,12 @@ namespace CloudRFPlugin
             return names;
         }
 
-        private void TrackImportedRasterLayers(List<string> beforeImport, string geoTiffPath, bool loaded)
+        private List<string> TrackImportedRasterLayers(List<string> beforeImport, string geoTiffPath, bool loaded)
         {
+            var trackedNames = new List<string>();
             if (!loaded)
             {
-                return;
+                return trackedNames;
             }
 
             var afterImport = CaptureRasterLayerNames();
@@ -839,7 +850,49 @@ namespace CloudRFPlugin
                     ApplyDefaultTransparency(layerName);
                     Log("Tracked CloudRF layer: " + layerName);
                 }
+
+                trackedNames.Add(layerName);
             }
+
+            return trackedNames;
+        }
+
+        private void UpdateLastRunSummary(CloudRFAreaResult result, string geoTiffPath, string legendPath, List<string> importedLayerNames)
+        {
+            var lines = new List<string>
+            {
+                "CloudRF result",
+                "--------------",
+                "Job ID: " + ValueOrDash(result.Id),
+                "Archive: " + ValueOrDash(result.ArchiveUrl),
+                "GeoTIFF: " + ValueOrDash(geoTiffPath),
+                "Legend text: " + Path.Combine(_settings.OutputDirectory, Path.GetFileNameWithoutExtension(geoTiffPath) + "-legend.txt"),
+                "Legend image: " + ValueOrDash(legendPath),
+                "",
+                "Metrics",
+                "-------",
+                "Area: " + FormatNullable(result.Area, " sq km"),
+                "Coverage: " + FormatNullable(result.Coverage, "%"),
+                "Elapsed: " + FormatNullable(result.Elapsed, " ms"),
+                "Balance: " + FormatNullable(result.Balance, ""),
+                "Bounds: " + FormatBounds(result.Bounds),
+                "",
+                "MACE import",
+                "-----------",
+                "Auto import: " + (_settings.AutoImportGeoTiff ? "ON" : "OFF"),
+                "Layer(s): " + (importedLayerNames != null && importedLayerNames.Count > 0 ? string.Join(", ", importedLayerNames) : "-"),
+                "Transparency: " + DefaultRasterTransparency + "%",
+                "",
+                "Request",
+                "-------",
+                "Model: " + _modelMode.Text,
+                "Diffraction: " + _diffractionMode.Text,
+                "Antenna: " + _antennaPattern.Text,
+                "Environment: elevation " + _elevationModel.Text + ", land cover " + _landcoverMode.Text + ", buildings " + _buildingsMode.Text + ", obstacles " + _obstaclesMode.Text,
+                "Output: " + _radiusKm.Value.ToString(CultureInfo.InvariantCulture) + " km radius, " + _resolutionM.Value.ToString(CultureInfo.InvariantCulture) + " m resolution, " + _colorSchema.Text
+            };
+
+            _lastRunSummaryTextBox.Text = string.Join(Environment.NewLine, lines);
         }
 
         private void ApplyDefaultTransparency(string layerName)
@@ -992,6 +1045,26 @@ namespace CloudRFPlugin
         {
             if (string.IsNullOrWhiteSpace(text)) return "MACE";
             return text.Length <= maxLength ? text : text.Substring(0, maxLength);
+        }
+
+        private static string ValueOrDash(string value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? "-" : value;
+        }
+
+        private static string FormatNullable(double? value, string suffix)
+        {
+            return value.HasValue ? value.Value.ToString("0.###", CultureInfo.InvariantCulture) + suffix : "-";
+        }
+
+        private static string FormatBounds(List<double> bounds)
+        {
+            if (bounds == null || bounds.Count != 4)
+            {
+                return "-";
+            }
+
+            return string.Format(CultureInfo.InvariantCulture, "N {0:0.######}, E {1:0.######}, S {2:0.######}, W {3:0.######}", bounds[0], bounds[1], bounds[2], bounds[3]);
         }
 
         private void Log(string message)

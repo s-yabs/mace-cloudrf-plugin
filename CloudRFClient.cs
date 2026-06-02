@@ -48,6 +48,11 @@ namespace CloudRFPlugin
                         PngWgs84Url = FirstString(json, "PNG_WGS84", "png_wgs84"),
                         ArchiveUrl = FirstString(json, "url"),
                         LegendUrl = FirstString(json, "legend", "legend_url", "chart", "chart_url", "Chart image"),
+                        Area = FirstDouble(json, "area"),
+                        Coverage = FirstDouble(json, "coverage"),
+                        Elapsed = FirstDouble(json, "elapsed"),
+                        Balance = FirstDouble(json, "balance"),
+                        Bounds = ParseBounds(json),
                         LegendEntries = ParseLegendEntries(json)
                     };
                 }
@@ -129,6 +134,37 @@ namespace CloudRFPlugin
             return "";
         }
 
+        private static double? FirstDouble(Dictionary<string, object> json, string key)
+        {
+            if (!json.TryGetValue(key, out object value) || value == null)
+            {
+                return null;
+            }
+
+            return double.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture), NumberStyles.Float, CultureInfo.InvariantCulture, out double result)
+                ? result
+                : (double?)null;
+        }
+
+        private static List<double> ParseBounds(Dictionary<string, object> json)
+        {
+            var bounds = new List<double>();
+            if (!json.TryGetValue("bounds", out object boundsValue) || !(boundsValue is ArrayList list))
+            {
+                return bounds;
+            }
+
+            foreach (object value in list)
+            {
+                if (double.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture), NumberStyles.Float, CultureInfo.InvariantCulture, out double result))
+                {
+                    bounds.Add(result);
+                }
+            }
+
+            return bounds;
+        }
+
         private static List<CloudRFLegendEntry> ParseLegendEntries(Dictionary<string, object> json)
         {
             var entries = new List<CloudRFLegendEntry>();
@@ -191,6 +227,11 @@ namespace CloudRFPlugin
         public string PngWgs84Url { get; set; }
         public string ArchiveUrl { get; set; }
         public string LegendUrl { get; set; }
+        public double? Area { get; set; }
+        public double? Coverage { get; set; }
+        public double? Elapsed { get; set; }
+        public double? Balance { get; set; }
+        public List<double> Bounds { get; set; } = new List<double>();
         public List<CloudRFLegendEntry> LegendEntries { get; set; } = new List<CloudRFLegendEntry>();
     }
 
