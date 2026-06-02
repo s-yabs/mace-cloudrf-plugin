@@ -27,6 +27,7 @@ namespace CloudRFPlugin
         private TextBox _templatePathTextBox;
         private TextBox _outputDirectoryTextBox;
         private CheckBox _autoImportCheckBox;
+        private CheckBox _downloadKmzCheckBox;
         private Label _selectedEntityLabel;
         private TextBox _advancedJsonTextBox;
         private TextBox _logTextBox;
@@ -153,7 +154,7 @@ namespace CloudRFPlugin
 
         private void BuildSettingsTab(TabPage tab)
         {
-            var panel = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 3, RowCount = 5, Padding = new Padding(12), Height = 180 };
+            var panel = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 3, RowCount = 6, Padding = new Padding(12), Height = 212 };
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
@@ -169,6 +170,10 @@ namespace CloudRFPlugin
             _autoImportCheckBox = new CheckBox { Text = "Import GeoTIFF into MACE after download", Dock = DockStyle.Fill, Checked = true };
             panel.Controls.Add(new Label(), 0, 4);
             panel.Controls.Add(_autoImportCheckBox, 1, 4);
+
+            _downloadKmzCheckBox = new CheckBox { Text = "Download KMZ for ATAK / WinTAK", Dock = DockStyle.Fill, Checked = true };
+            panel.Controls.Add(new Label(), 0, 5);
+            panel.Controls.Add(_downloadKmzCheckBox, 1, 5);
         }
 
         private void BuildAreaTab(TabPage tab)
@@ -598,6 +603,7 @@ namespace CloudRFPlugin
             _templatePathTextBox.Text = _settings.TemplatePath ?? CloudRFSettings.DefaultTemplatePath;
             _outputDirectoryTextBox.Text = _settings.OutputDirectory ?? CloudRFSettings.DefaultOutputDirectory;
             _autoImportCheckBox.Checked = _settings.AutoImportGeoTiff;
+            _downloadKmzCheckBox.Checked = _settings.DownloadKmz;
             LoadTemplatePreview();
         }
 
@@ -608,6 +614,7 @@ namespace CloudRFPlugin
             _settings.TemplatePath = _templatePathTextBox.Text.Trim();
             _settings.OutputDirectory = _outputDirectoryTextBox.Text.Trim();
             _settings.AutoImportGeoTiff = _autoImportCheckBox.Checked;
+            _settings.DownloadKmz = _downloadKmzCheckBox.Checked;
             _settings.Save();
             Log("Settings saved.");
         }
@@ -760,6 +767,14 @@ namespace CloudRFPlugin
                 Log("GeoTIFF saved: " + geoTiffPath);
 
                 SaveTextLegend(baseName);
+                string kmzPath = "";
+                if (_settings.DownloadKmz)
+                {
+                    Log("Downloading KMZ...");
+                    kmzPath = await client.DownloadKmzAsync(result, baseName, _runCancellation.Token);
+                    Log(string.IsNullOrWhiteSpace(kmzPath) ? "KMZ download skipped: no KMZ URL was available." : "KMZ saved: " + kmzPath);
+                }
+
                 string legendPath = await client.DownloadLegendAsync(result, baseName, _runCancellation.Token);
                 if (!string.IsNullOrWhiteSpace(legendPath))
                 {
@@ -776,7 +791,7 @@ namespace CloudRFPlugin
                     _host.DisplayNotification("CloudRF", loaded ? "Coverage GeoTIFF loaded into MACE." : "GeoTIFF downloaded, but MACE did not load it.");
                 }
 
-                UpdateLastRunSummary(result, geoTiffPath, legendPath, importedLayerNames);
+                UpdateLastRunSummary(result, geoTiffPath, kmzPath, legendPath, importedLayerNames);
             }
             catch (Exception ex)
             {
@@ -857,7 +872,7 @@ namespace CloudRFPlugin
             return trackedNames;
         }
 
-        private void UpdateLastRunSummary(CloudRFAreaResult result, string geoTiffPath, string legendPath, List<string> importedLayerNames)
+        private void UpdateLastRunSummary(CloudRFAreaResult result, string geoTiffPath, string kmzPath, string legendPath, List<string> importedLayerNames)
         {
             var lines = new List<string>
             {
@@ -866,6 +881,7 @@ namespace CloudRFPlugin
                 "Job ID: " + ValueOrDash(result.Id),
                 "Archive: " + ValueOrDash(result.ArchiveUrl),
                 "GeoTIFF: " + ValueOrDash(geoTiffPath),
+                "KMZ: " + ValueOrDash(kmzPath),
                 "Legend text: " + Path.Combine(_settings.OutputDirectory, Path.GetFileNameWithoutExtension(geoTiffPath) + "-legend.txt"),
                 "Legend image: " + ValueOrDash(legendPath),
                 "",

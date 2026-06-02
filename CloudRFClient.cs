@@ -91,6 +91,41 @@ namespace CloudRFPlugin
             return outputPath;
         }
 
+        public async Task<string> DownloadKmzAsync(CloudRFAreaResult result, string baseFileName, CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(result.KmzUrl))
+            {
+                if (string.IsNullOrWhiteSpace(result.Id))
+                {
+                    return "";
+                }
+
+                result.KmzUrl = _settings.BaseUrl.TrimEnd('/') + "/archive/" + result.Id + "/kmz";
+            }
+
+            if (!Uri.TryCreate(result.KmzUrl, UriKind.Absolute, out Uri kmzUri))
+            {
+                return "";
+            }
+
+            Directory.CreateDirectory(_settings.OutputDirectory);
+            string outputPath = Path.Combine(_settings.OutputDirectory, SanitizeFileName(baseFileName) + ".kmz");
+
+            using (var client = new HttpClient())
+            using (HttpResponseMessage response = await client.GetAsync(kmzUri, cancellationToken).ConfigureAwait(false))
+            {
+                if (!response.IsSuccessStatusCode)
+                {
+                    return "";
+                }
+
+                byte[] bytes = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+                File.WriteAllBytes(outputPath, bytes);
+            }
+
+            return outputPath;
+        }
+
         public async Task<string> DownloadLegendAsync(CloudRFAreaResult result, string baseFileName, CancellationToken cancellationToken)
         {
             if (string.IsNullOrWhiteSpace(result.LegendUrl))

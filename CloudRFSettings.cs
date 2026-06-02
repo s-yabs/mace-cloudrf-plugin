@@ -10,6 +10,7 @@ namespace CloudRFPlugin
         public string TemplatePath { get; set; }
         public string OutputDirectory { get; set; }
         public bool AutoImportGeoTiff { get; set; } = true;
+        public bool DownloadKmz { get; set; } = true;
 
         public static string AppDirectory => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.CommonDocuments),
