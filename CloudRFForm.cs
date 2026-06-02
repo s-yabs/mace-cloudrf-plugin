@@ -13,6 +13,8 @@ namespace CloudRFPlugin
 {
     internal sealed class CloudRFForm : Form
     {
+        private const int DefaultRasterTransparency = 50;
+
         private readonly IMACEPlugInHost _host;
         private CloudRFSettings _settings;
         private CancellationTokenSource _runCancellation;
@@ -718,8 +720,29 @@ namespace CloudRFPlugin
                 if (!_importedRasterLayerNames.Contains(layerName))
                 {
                     _importedRasterLayerNames.Add(layerName);
+                    ApplyDefaultTransparency(layerName);
                     Log("Tracked CloudRF layer: " + layerName);
                 }
+            }
+        }
+
+        private void ApplyDefaultTransparency(string layerName)
+        {
+            try
+            {
+                foreach (IRasterLayer layer in _host.Mission.Map.LayerManager.RasterLayers)
+                {
+                    if (layer != null && string.Equals(layer.LayerName, layerName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        layer.Transparency = DefaultRasterTransparency;
+                        Log(string.Format(CultureInfo.InvariantCulture, "Set layer transparency to {0}%: {1}", DefaultRasterTransparency, layerName));
+                        return;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log("Could not set layer transparency: " + ex.Message);
             }
         }
 
