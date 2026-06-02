@@ -32,6 +32,7 @@ namespace CloudRFPlugin
         private Button _removeLastLayerButton;
         private LegendControl _legendControl;
         private PictureBox _downloadedLegendPictureBox;
+        private ToolTip _toolTips;
 
         private NumericUpDown _frequencyMhz;
         private NumericUpDown _txPowerWatts;
@@ -56,9 +57,11 @@ namespace CloudRFPlugin
         private ComboBox _modelMode;
         private NumericUpDown _reliability;
         private ComboBox _colorSchema;
-        private CheckBox _useElevation;
-        private CheckBox _useLandcover;
-        private CheckBox _useBuildings;
+        private ComboBox _clutterProfile;
+        private ComboBox _elevationModel;
+        private ComboBox _landcoverMode;
+        private ComboBox _buildingsMode;
+        private ComboBox _obstaclesMode;
 
         public CloudRFForm(IMACEPlugInHost host)
         {
@@ -76,6 +79,7 @@ namespace CloudRFPlugin
             Height = 760;
             MinimumSize = new Size(900, 620);
             StartPosition = FormStartPosition.CenterParent;
+            _toolTips = new ToolTip { AutoPopDelay = 30000, InitialDelay = 500, ReshowDelay = 100, ShowAlways = true };
 
             var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Padding = new Padding(12) };
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
@@ -173,7 +177,7 @@ namespace CloudRFPlugin
             main.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 330));
             main.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 330));
             main.RowStyles.Add(new RowStyle(SizeType.Absolute, 275));
-            main.RowStyles.Add(new RowStyle(SizeType.Absolute, 230));
+            main.RowStyles.Add(new RowStyle(SizeType.Absolute, 255));
             scrollPanel.Controls.Add(main);
 
             var transmitter = CreateGroup("Transmitter");
@@ -197,15 +201,14 @@ namespace CloudRFPlugin
             _horizontalBeamwidthDeg = AddNumber(antenna, "Horizontal beamwidth", 1, 360, 90, 0);
             _verticalBeamwidthDeg = AddNumber(antenna, "Vertical beamwidth", 1, 360, 90, 0);
             _frontBackRatioDb = AddNumber(antenna, "Front/back ratio (dB)", 0, 100, 2, 0);
-            _polarization = AddCombo(antenna, "Polarisation", new[] { "v", "h", "m", "r", "l" });
+            _polarization = AddOptionCombo(antenna, "Polarisation", PolarisationChoices());
             AddFixedGroup(main, antenna, 2, 0);
 
             var model = CreateGroup("Model");
             _modelMode = AddOptionCombo(model, "Propagation model", PropagationModelChoices());
+            SetToolTip(_modelMode, PropagationModelToolTip());
             _reliability = AddNumber(model, "Reliability (%)", 1, 99, 90, 0);
-            _useElevation = AddCheck(model, "Terrain elevation", true);
-            _useLandcover = AddCheck(model, "Land cover / clutter", true);
-            _useBuildings = AddCheck(model, "Buildings", true);
+            SetToolTip(_reliability, "Reliability/time percentage used by supported models such as ITM. Higher values are more conservative.");
             AddFixedGroup(main, model, 0, 1);
 
             var output = CreateGroup("Output");
@@ -219,9 +222,18 @@ namespace CloudRFPlugin
             _colorSchema.SelectedIndexChanged += (sender, args) => _legendControl.SchemaName = Convert.ToString(_colorSchema.SelectedItem);
             AddFixedGroup(main, output, 1, 1);
 
-            var note = CreateGroup("MACE Source");
-            AddStaticLabel(note, "The selected MACE entity supplies transmitter latitude and longitude. Other RF values are CloudRF-native parameters and can be tuned here or in Advanced JSON.");
-            AddFixedGroup(main, note, 2, 1);
+            var environment = CreateGroup("Environment");
+            _clutterProfile = AddCombo(environment, "Profile", new[] { "Minimal.clt" });
+            SetToolTip(_clutterProfile, "CloudRF clutter profile name. Minimal.clt is the default; paid/custom accounts may use their own saved profile names.");
+            _elevationModel = AddOptionCombo(environment, "Elevation", ElevationChoices());
+            SetToolTip(_elevationModel, "Surface / DSM uses surface or LiDAR heights when available. Terrain / DTM uses bare earth ground heights.");
+            _landcoverMode = AddOptionCombo(environment, "Land cover", OffOnChoices());
+            SetToolTip(_landcoverMode, "ON adds CloudRF system 10m land cover clutter. CloudRF may adjust this for large radius or coarse resolution requests.");
+            _buildingsMode = AddOptionCombo(environment, "Buildings", OffOnChoices());
+            SetToolTip(_buildingsMode, "ON adds CloudRF building data where available. CloudRF may adjust this for large radius or coarse resolution requests.");
+            _obstaclesMode = AddOptionCombo(environment, "My obstacles", OffOnChoices());
+            SetToolTip(_obstaclesMode, "ON includes custom obstacles saved in the CloudRF account, placed on the selected elevation model.");
+            AddFixedGroup(main, environment, 2, 1);
         }
 
         private static void AddFixedGroup(TableLayoutPanel main, GroupBuilder group, int column, int row)
@@ -379,6 +391,21 @@ namespace CloudRFPlugin
             };
         }
 
+        private static string PropagationModelToolTip()
+        {
+            return "ITM / Longley-Rice: general-purpose terrain model, 20-20,000 MHz." + Environment.NewLine +
+                   "Line of Sight: obstruction visibility model; useful for microwave LOS checks." + Environment.NewLine +
+                   "Okumura-Hata: urban cellular model, 150-1500 MHz; assumes elevated base stations." + Environment.NewLine +
+                   "ECC33: cellular/microwave model, 700-3500 MHz." + Environment.NewLine +
+                   "SUI Microwave: WiMAX/microwave model, 1900-11000 MHz." + Environment.NewLine +
+                   "COST231: Hata extension for urban systems, 150-2000 MHz." + Environment.NewLine +
+                   "Free space path loss: ideal clear-path model with no clutter unless diffraction is added." + Environment.NewLine +
+                   "RADAR: radar-oriented model." + Environment.NewLine +
+                   "Ericsson 9999: cellular model up to about 1900 MHz." + Environment.NewLine +
+                   "Plane earth loss: two-ray/plane-earth style loss model." + Environment.NewLine +
+                   "Egli VHF/UHF: rural VHF/UHF model, 30-1000 MHz; more conservative than FSPL.";
+        }
+
         private static List<OptionItem> ModulationChoices()
         {
             return new List<OptionItem>
@@ -394,6 +421,18 @@ namespace CloudRFPlugin
                 new OptionItem(9, "16PSK"),
                 new OptionItem(10, "32PSK"),
                 new OptionItem(11, "LoRa")
+            };
+        }
+
+        private static List<OptionItem> PolarisationChoices()
+        {
+            return new List<OptionItem>
+            {
+                new OptionItem("v", "Vertical"),
+                new OptionItem("h", "Horizontal"),
+                new OptionItem("m", "Mixed"),
+                new OptionItem("r", "Right circular"),
+                new OptionItem("l", "Left circular")
             };
         }
 
@@ -420,6 +459,24 @@ namespace CloudRFPlugin
                 new OptionItem(4, "0.0001"),
                 new OptionItem(5, "0.00001"),
                 new OptionItem(6, "0.000001")
+            };
+        }
+
+        private static List<OptionItem> ElevationChoices()
+        {
+            return new List<OptionItem>
+            {
+                new OptionItem(1, "Surface / DSM"),
+                new OptionItem(2, "Terrain / DTM")
+            };
+        }
+
+        private static List<OptionItem> OffOnChoices()
+        {
+            return new List<OptionItem>
+            {
+                new OptionItem(0, "OFF"),
+                new OptionItem(1, "ON")
             };
         }
 
@@ -461,6 +518,29 @@ namespace CloudRFPlugin
             }
         }
 
+        private static void SelectOptionValue(ComboBox comboBox, string code)
+        {
+            if (comboBox == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < comboBox.Items.Count; i++)
+            {
+                var item = comboBox.Items[i] as OptionItem;
+                if (item != null && string.Equals(item.Code, code, StringComparison.OrdinalIgnoreCase))
+                {
+                    comboBox.SelectedIndex = i;
+                    return;
+                }
+            }
+
+            if (comboBox.Items.Count > 0)
+            {
+                comboBox.SelectedIndex = 0;
+            }
+        }
+
         private static int GetSelectedOptionValue(ComboBox comboBox, int fallback)
         {
             if (comboBox?.SelectedItem is OptionItem item)
@@ -469,6 +549,24 @@ namespace CloudRFPlugin
             }
 
             return fallback;
+        }
+
+        private static string GetSelectedOptionCode(ComboBox comboBox, string fallback)
+        {
+            if (comboBox?.SelectedItem is OptionItem item && !string.IsNullOrWhiteSpace(item.Code))
+            {
+                return item.Code;
+            }
+
+            return fallback;
+        }
+
+        private void SetToolTip(Control control, string text)
+        {
+            if (_toolTips != null && control != null)
+            {
+                _toolTips.SetToolTip(control, text);
+            }
         }
 
         private void LoadSettingsIntoForm()
@@ -562,7 +660,7 @@ namespace CloudRFPlugin
             SetNumber(_horizontalBeamwidthDeg, GetDecimal(antenna, "hbw", _horizontalBeamwidthDeg.Value));
             SetNumber(_verticalBeamwidthDeg, GetDecimal(antenna, "vbw", _verticalBeamwidthDeg.Value));
             SetNumber(_frontBackRatioDb, GetDecimal(antenna, "fbr", _frontBackRatioDb.Value));
-            _polarization.Text = JsonTools.GetString(antenna, "pol", "v");
+            SelectOptionValue(_polarization, JsonTools.GetString(antenna, "pol", "v"));
             SetNumber(_radiusKm, GetDecimal(output, "rad", _radiusKm.Value));
             SetNumber(_resolutionM, GetDecimal(output, "res", _resolutionM.Value));
             SetNumber(_noiseFloorDbm, GetDecimal(output, "nf", _noiseFloorDbm.Value));
@@ -573,9 +671,11 @@ namespace CloudRFPlugin
             SetNumber(_reliability, GetDecimal(model, "rel", _reliability.Value));
             _colorSchema.Text = JsonTools.GetString(output, "col", "LORA.dBm");
             _legendControl.SchemaName = _colorSchema.Text;
-            _useElevation.Checked = GetInt(environment, "elevation", 1) == 1;
-            _useLandcover.Checked = GetInt(environment, "landcover", 1) == 1;
-            _useBuildings.Checked = GetInt(environment, "buildings", 1) == 1;
+            _clutterProfile.Text = JsonTools.GetString(environment, "clt", "Minimal.clt");
+            SelectOptionValue(_elevationModel, GetInt(environment, "elevation", 1));
+            SelectOptionValue(_landcoverMode, GetInt(environment, "landcover", 1));
+            SelectOptionValue(_buildingsMode, GetInt(environment, "buildings", 1));
+            SelectOptionValue(_obstaclesMode, GetInt(environment, "obstacles", 0));
         }
 
         private void RefreshSelectedEntity()
@@ -809,7 +909,7 @@ namespace CloudRFPlugin
             antenna["hbw"] = D(_horizontalBeamwidthDeg);
             antenna["vbw"] = D(_verticalBeamwidthDeg);
             antenna["fbr"] = D(_frontBackRatioDb);
-            antenna["pol"] = _polarization.Text.Trim();
+            antenna["pol"] = GetSelectedOptionCode(_polarization, "v");
 
             model["pm"] = GetSelectedOptionValue(_modelMode, 1);
             model["rel"] = Convert.ToInt32(_reliability.Value);
@@ -821,9 +921,11 @@ namespace CloudRFPlugin
             output["ber"] = GetSelectedOptionValue(_bitErrorRate, 1);
             output["col"] = _colorSchema.Text.Trim();
 
-            environment["elevation"] = _useElevation.Checked ? 1 : 0;
-            environment["landcover"] = _useLandcover.Checked ? 1 : 0;
-            environment["buildings"] = _useBuildings.Checked ? 1 : 0;
+            environment["clt"] = string.IsNullOrWhiteSpace(_clutterProfile.Text) ? "Minimal.clt" : _clutterProfile.Text.Trim();
+            environment["elevation"] = GetSelectedOptionValue(_elevationModel, 1);
+            environment["landcover"] = GetSelectedOptionValue(_landcoverMode, 1);
+            environment["buildings"] = GetSelectedOptionValue(_buildingsMode, 1);
+            environment["obstacles"] = GetSelectedOptionValue(_obstaclesMode, 0);
 
             request["site"] = TruncateForCloudRF(entity.Name, 24);
             if (!request.ContainsKey("network") || string.IsNullOrWhiteSpace(Convert.ToString(request["network"], CultureInfo.InvariantCulture)))
@@ -887,11 +989,20 @@ namespace CloudRFPlugin
         private sealed class OptionItem
         {
             public int Value { get; }
+            public string Code { get; }
             public string Text { get; }
 
             public OptionItem(int value, string text)
             {
                 Value = value;
+                Code = Convert.ToString(value, CultureInfo.InvariantCulture);
+                Text = text;
+            }
+
+            public OptionItem(string code, string text)
+            {
+                Value = 0;
+                Code = code;
                 Text = text;
             }
 
